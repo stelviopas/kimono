@@ -1,0 +1,193 @@
+---
+title: "<div class='mytitle'>Benchmarking</div>"
+#author: "<center>[Christoph Ogris](https://github.com/cellmapslab/kimono) </center>"
+date: "<center>`r format(Sys.time(), '%d %B %Y')`</center>"
+mail: "christoph.ogris@helmholtz-muenchen.de"
+linkedin: "christoph-ogris-6a223082"
+twitter: "christoph_ogris"
+github: "00chris00"
+home: "www.helmholtz-muenchen.de/icb/index.html"
+logo: "logo.png"
+output:
+  lazyrmd::lazy_render:
+    toc: TRUE
+    toc_float:
+      collapsed: true
+      smooth_scroll: false
+    number_sections: FALSE
+    css: style.css
+    self_contained: false
+---
+
+# Libraries
+```{r, warning = FALSE,  message=FALSE}
+library(kimono) # framework v 2.0.1.0006
+```
+
+## Load Data
+
+```{r, warning = FALSE}
+load('data/220221_benchmark.RData')
+```
+
+## Remove Phenotype Features
+
+```{r, warning = FALSE}
+#input_data$phenotype <- input_data$phenotype[,-c('srv.time','srv.status')]
+```
+
+
+## DEBUG EXAMPLE
+
+```{r, warning = FALSE}
+DEBUG_nodes <- V(prior_network)[name %like% c('MAPK1','MYC')]
+DEBUG_subnet <- ego(prior_network, order=1, nodes = DEBUG_nodes, mode = "all", mindist = 0)
+DEBUG_prior_network <- induced_subgraph(prior_network,unlist(DEBUG_subnet))
+rm(DEBUG_nodes, DEBUG_subnet)
+```
+
+#### Plotting prior network
+```{r, warning = FALSE}
+vertex <- do.call(rbind,strsplit(V(DEBUG_prior_network)$name,split = '___'))
+
+DEBUG_prior_network %>% plot(edge.curved=0,
+                       main = 'DEBUG Prior Network',
+     vertex.color = c("steel blue", "orange","limegreen","grey")[vertex[,1] %>% as.factor %>% as.numeric],
+     vertex.frame.color="white",
+     vertex.label = vertex[,2], 
+     vertex.label.color='black',
+     vertex.label.cex=.7,
+     layout=layout_randomly, rescale=F) 
+```
+
+# Dealing with missing data 
+## Multivariate Imputation by Chained Equations
+The fully observed variables are cnv and mutation. Partially observed variables are genes, methylation, phenotype, time, status.
+
+```{r, warning=TRUE}
+library(mice)
+
+# Which data is missing? 
+message(paste0("# of missing values by genes ",sum(is.na(input_data$gene))))
+message(paste0("# of missing values by methylation ",sum(is.na(input_data$methylation))))
+message(paste0("# of missing values by cnv ",sum(is.na(input_data$cnv))))
+message(paste0("# of missing values by phenotype ",sum(is.na(input_data$phenotype))))
+message(paste0("# of missing values by phenotype: time ",sum(is.na(input_data$phenotype$srv.time))))
+message(paste0("# of missing values by phenotype: status ",sum(is.na(input_data$phenotype$srv.status))))
+message(paste0("# of missing values by mutation ",sum(is.na(input_data$mutation))))
+```
+```{r}
+THRESHOLD_MISSING <- 0.2 
+# GENES
+# rows are sample IDs, columns are gene IDs
+gene <- as.data.frame(input_data$gene)
+message(paste0("genes before removing missing values ", dim(gene)))
+geneTidy <- gene[which(rowMeans(!is.na(gene)) > 1-THRESHOLD_MISSING), which(colMeans(!is.na(gene)) > 1-THRESHOLD_MISSING)]
+message(paste0("/n genes after removing missing values ", dim(geneTidy)))
+geneImp <- mice(geneTidy, meth = "rf", ntree = 3)
+```
+
+```{r}
+# METHYLATION
+# rows are sample IDs, columns are gene methylation sites
+methylation <- as.data.frame(input_data$methylation)
+message(paste0("genes before removing missing values ", dim(gene)))
+geneTidy <- gene[which(rowMeans(!is.na(gene)) > 1-THRESHOLD_MISSING), which(colMeans(!is.na(gene)) > 1-THRESHOLD_MISSING)]
+message(paste0("/n genes after removing missing values ", dim(geneTidy)))
+geneImp <- mice(geneTidy, meth = "rf", ntree = 3)
+```
+
+# KiMONo
+
+## Call KiMONo
+```{r, warning = FALSE}
+network <- kimono(input_data, DEBUG_prior_network ,core = 2, infer_missing_prior = TRUE)
+#plot network
+to_igraph(network) %>% plot_kimono(title='KiMONo Network (directed)')
+to_igraph(network, directed = F) %>% plot_kimono(title='KiMONo Network (undirected)')
+```
+
+## Result
+<br>
+Columns:
+
+  * **target** - vector y in regression model
+  * **predictor** - each feature in X used in model y
+  * **value** - effect size of predictor on target
+  * **r_squared** - model performance
+  * **mse** - model error
+  * **predictor_layer** - input data the predictor belongs to
+  * **target_layer** - input data the target belongs to
+
+<br>
+```{r, warning = FALSE}
+DT::datatable(head(network), class = 'cell-border stripe')
+```
+
+
+# Network Analysis
+***
+
+## Quality
+
+Evaluating the r2 for each model gives us the possibility to compare the performances of our models.
+
+> Note the rsquared is the same for each target.  
+
+```{r, warning = FALSE}
+gg_all <- network[predictor == '(Intercept)',] %>%  
+            ggplot( aes(y=r_squared))  +
+                    geom_boxplot()
+
+gg_grouped <- network[predictor == '(Intercept)',] %>%  
+            ggplot( aes(y=r_squared,x=target_layer))  +   
+                    geom_boxplot(fill=c("steel blue",'#842F39', "orange"))
+
+nnodes <- c(network$target, network$predictor) %>% unique %>% length
+nedges <- dim(network)[1]
+
+cat('Number of Nodes: ',nnodes)
+cat('Number of Edges: ',nedges)
+```
+
+
+## Filter network 
+
+Often we are only interested in models which perform well and have large effect sizes.
+```{r, warning = FALSE}
+network <- network %>% 
+  filter(value > 0.001 | value < -0.001 ) %>% # filter low effects
+  filter(r_squared > 0.001)  %>%  # filter low performing models
+  filter(predictor != '(Intercept)') # filter all intercepts (should be close to 0 due to normalization step)
+```
+
+New network properties
+```{r, warning = FALSE}
+nnodes <- c(network$target, network$predictor) %>% unique %>% length
+nedges <- dim(network)[1]
+
+cat('Number of Nodes: ',nnodes)
+cat('Number of Edges: ',nedges)
+```
+
+Generate igraph for easier network analysis
+```{r, warning = FALSE}
+#generate undirected igraph
+ig_network <- to_igraph(network, directed=TRUE) 
+ig_network %>% plot_kimono
+```
+
+## General
+```{r, warning = FALSE}
+cat('Density: ', ecount(ig_network)/(vcount(ig_network)*(vcount(ig_network)-1)), '\n' )
+cat('Reciprocity: ', reciprocity(ig_network) , '\n' )
+cat('Transitivity: ', transitivity(as.undirected(ig_network, mode="collapse")) , '\n' )
+```
+
+# Session
+***
+```{r , eval = FALSE }
+ sessionInfo()
+```
+
+
