@@ -1,6 +1,6 @@
 library(mice)
-setwd("/home/anastasiia.grekova/kimono/")
-load("data/220221_benchmark.RData")
+setwd("/home/icb/anastasiia.grekova/")
+load("ECCB_2022/data/220221_benchmark_v2.RData")
 
 # Which data is missing?
 message(paste0("# of missing values by genes ",sum(is.na(input_data$gene))))
