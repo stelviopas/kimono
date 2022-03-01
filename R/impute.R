@@ -21,8 +21,8 @@ message("genes before removing missing values ")
 geneTidy <- gene[which(rowMeans(!is.na(gene)) > 1-THRESHOLD_MISSING), which(colMeans(!is.na(gene)) > 1-THRESHOLD_MISSING)]
 print(dim(geneTidy))
 message("genes after removing missing values ")
-geneImp <- mice(geneTidy, meth = "rf", ntree = 10)
-
+geneImp <- mice(geneTidy, meth="rf", ntree=10)
+geneTidyImp <- complete(geneImp)
 # METHYLATION
 # rows are sample IDs, columns are gene methylation sites
 methylation <- as.data.frame(input_data$methylation)
@@ -31,5 +31,6 @@ message("methylations before removing missing values ")
 methylationTidy <- methylation[which(rowMeans(!is.na(methylation)) > 1-THRESHOLD_MISSING), which(colMeans(!is.na(methylation)) > 1-THRESHOLD_MISSING)]
 print(dim(methylationTidy))
 message("methylations after removing missing values ")
-methylationImp <- mice(methylationTidy, meth = "rf", ntree = 10)
+methylationImp <- mice(methylationTidy, meth="rf", ntree=10)
+methylationTidyImp <- complete(methylationImp)
 save.image(file = "workspace_output.RData")

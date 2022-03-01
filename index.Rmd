@@ -27,6 +27,7 @@ library(kimono) # framework v 2.0.1.0006
 ## Load Data
 
 ```{r, warning = FALSE}
+#load('data/220221_benchmark.RData')
 load('data/220221_benchmark.RData')
 ```
 
@@ -88,7 +89,9 @@ message("genes before removing missing values ")
 geneTidy <- gene[which(rowMeans(!is.na(gene)) > 1-THRESHOLD_MISSING), which(colMeans(!is.na(gene)) > 1-THRESHOLD_MISSING)]
 print(dim(geneTidy))
 message("genes after removing missing values ")
-#geneImp <- mice(geneTidy, meth = "rf", ntree = 3)
+message(paste0("# of missing values by genes ",sum(is.na(geneTidy))))
+geneImp <- mice(geneTidy, meth="rf")
+imputed.geneTidy <- complete(geneImp)
 ```
 
 ```{r}
@@ -100,6 +103,7 @@ message("methylations before removing missing values ")
 methylationTidy <- methylation[which(rowMeans(!is.na(methylation)) > 1-THRESHOLD_MISSING), which(colMeans(!is.na(methylation)) > 1-THRESHOLD_MISSING)]
 print(dim(methylationTidy))
 message("methylations after removing missing values ")
+message(paste0("# of missing values by methylation ",sum(is.na(methylationTidy))))
 #geneImp <- mice(geneTidy, meth = "rf", ntree = 3)
 ```
 # KiMONo
