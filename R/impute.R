@@ -17,6 +17,7 @@ message(paste0("# of missing values by mutation ",sum(is.na(input_data$mutation)
 
 THRESHOLD_MISSING <- 0.2
 SEED <- 42
+K <- 10
 
 # GENES
 # rows are sample IDs, columns are gene IDs
@@ -25,7 +26,7 @@ gene <- as.data.frame(input_data$gene)
 gene.t <- t(gene)
 print(dim(gene.t))
 message("genes x samples before the knn imputation ")
-geneImp <- impute.knn(gene.t, k=2, rowmax = THRESHOLD_MISSING, colmax = THRESHOLD_MISSING, rng.seed = SEED)
+geneImp <- impute.knn(gene.t, k=K, rowmax = THRESHOLD_MISSING, colmax = THRESHOLD_MISSING, rng.seed = SEED)
 imputedGene <- t(geneImp$data)
 message(paste0("# of missing values by genes after imputation ",sum(is.na(imputedGene))))
 
@@ -50,13 +51,13 @@ methylation <- as.data.frame(input_data$methylation)
 methylation.t <- t(methylation)
 print(dim(methylation.t))
 message("methylation x samples before the knn imputation")
-methylationImp <- impute.knn(methylation.t, k=2, rowmax = THRESHOLD_MISSING, colmax = THRESHOLD_MISSING, rng.seed = SEED)
+methylationImp <- impute.knn(methylation.t, k=K, rowmax = THRESHOLD_MISSING, colmax = THRESHOLD_MISSING, rng.seed = SEED)
 imputedMethylation <- t(methylationImp$data)
 message(paste0("# of missing values by methylation after imputation ",sum(is.na(imputedMethylation))))
 
 imputed_data <- input_data
-imputed_data$gene <- imputedGene
-imputed_data$methylation <- imputedMethylation
+imputed_data$gene <- as.data.table(imputedGene)
+imputed_data$methylation <- as.data.table(imputedMethylation)
 
 
 #methylationTidy <- methylation[which(rowMeans(!is.na(methylation)) > 1-THRESHOLD_MISSING), which(colMeans(!is.na(methylation)) > 1-THRESHOLD_MISSING)]
@@ -65,4 +66,4 @@ imputed_data$methylation <- imputedMethylation
 #methylationImp <- mice(methylationTidy, meth="rf", ntree=10)
 #methylationTidyImp <- complete(methylationImp)
 
-save.image(file = "workspace_output.RData")
+#save.image(file = "workspace_output.RData")

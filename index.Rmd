@@ -66,9 +66,9 @@ DEBUG_prior_network %>% plot(edge.curved=0,
 The fully observed variables are cnv and mutation. Partially observed variables are genes, methylation, phenotype, time, status.
 
 ```{r, warning=TRUE}
-library(mice)
+library(impute)
 
-# Which data is missing? 
+# Which data is missing?
 message(paste0("# of missing values by genes ",sum(is.na(input_data$gene))))
 message(paste0("# of missing values by methylation ",sum(is.na(input_data$methylation))))
 message(paste0("# of missing values by cnv ",sum(is.na(input_data$cnv))))
@@ -76,44 +76,62 @@ message(paste0("# of missing values by phenotype overall ",sum(is.na(input_data$
 message(paste0("# of missing values by phenotype: time ",sum(is.na(input_data$phenotype$srv.time))))
 message(paste0("# of missing values by phenotype: status ",sum(is.na(input_data$phenotype$srv.status))))
 message(paste0("# of missing values by mutation ",sum(is.na(input_data$mutation))))
-```
 
+THRESHOLD_MISSING <- 0.2
+SEED <- 42
+K <- 10
 
-```{r}
-THRESHOLD_MISSING <- 0.2 
 # GENES
 # rows are sample IDs, columns are gene IDs
 gene <- as.data.frame(input_data$gene)
-print(dim(gene))
-message("genes before removing missing values ")
-geneTidy <- gene[which(rowMeans(!is.na(gene)) > 1-THRESHOLD_MISSING), which(colMeans(!is.na(gene)) > 1-THRESHOLD_MISSING)]
-print(dim(geneTidy))
-message("genes after removing missing values ")
-message(paste0("# of missing values by genes ",sum(is.na(geneTidy))))
-geneImp <- mice(geneTidy, meth="rf")
-imputed.geneTidy <- complete(geneImp)
-```
+# transform
+gene.t <- t(gene)
+print(dim(gene.t))
+message("genes x samples before the knn imputation ")
+geneImp <- impute.knn(gene.t, k=K, rowmax = THRESHOLD_MISSING, colmax = THRESHOLD_MISSING, rng.seed = SEED)
+imputedGene <- t(geneImp$data)
+message(paste0("# of missing values by genes after imputation ",sum(is.na(imputedGene))))
 
-```{r}
-# METHYLATION
+#METHYLATION
 # rows are sample IDs, columns are gene methylation sites
 methylation <- as.data.frame(input_data$methylation)
-print(dim(methylation))
-message("methylations before removing missing values ")
-methylationTidy <- methylation[which(rowMeans(!is.na(methylation)) > 1-THRESHOLD_MISSING), which(colMeans(!is.na(methylation)) > 1-THRESHOLD_MISSING)]
-print(dim(methylationTidy))
-message("methylations after removing missing values ")
-message(paste0("# of missing values by methylation ",sum(is.na(methylationTidy))))
-#geneImp <- mice(geneTidy, meth = "rf", ntree = 3)
+# transform
+methylation.t <- t(methylation)
+print(dim(methylation.t))
+message("methylation x samples before the knn imputation")
+methylationImp <- impute.knn(methylation.t, k=K, rowmax = THRESHOLD_MISSING, colmax = THRESHOLD_MISSING, rng.seed = SEED)
+imputedMethylation <- t(methylationImp$data)
+message(paste0("# of missing values by methylation after imputation ",sum(is.na(imputedMethylation))))
+
+imputed_data <- input_data
+imputed_data$gene <- as.data.table(imputedGene)
+imputed_data$methylation <- as.data.table(imputedMethylation)
+
+message(paste0("# of missing values by genes ",sum(is.na(imputed_data$gene))))
+message(paste0("# of missing values by methylation ",sum(is.na(imputed_data$methylation))))
+message(paste0("# of missing values by cnv ",sum(is.na(imputed_data$cnv))))
+message(paste0("# of missing values by phenotype overall ",sum(is.na(imputed_data$phenotype))))
+message(paste0("# of missing values by phenotype: time ",sum(is.na(imputed_data$phenotype$srv.time))))
+message(paste0("# of missing values by phenotype: status ",sum(is.na(imputed_data$phenotype$srv.status))))
+message(paste0("# of missing values by mutation ",sum(is.na(imputed_data$mutation))))
 ```
+
 # KiMONo
 
 ## Call KiMONo
+### Input data
 ```{r, warning = FALSE}
-network <- kimono(input_data, DEBUG_prior_network ,core = 2, infer_missing_prior = TRUE)
+network <- kimono(input_data, DEBUG_prior_network, core = 2, infer_missing_prior = TRUE)
 #plot network
 to_igraph(network) %>% plot_kimono(title='KiMONo Network (directed)')
 to_igraph(network, directed = F) %>% plot_kimono(title='KiMONo Network (undirected)')
+```
+### Imputed data
+```{r, warning = FALSE}
+network_imputed <- kimono(imputed_data, DEBUG_prior_network, core = 2, infer_missing_prior = TRUE)
+#plot network
+to_igraph(network_imputed) %>% plot_kimono(title='KiMONo imputed Network (directed)')
+to_igraph(network_imputed, directed = F) %>% plot_kimono(title='KiMONo imputed Network (undirected)')
 ```
 
 ## Result
@@ -132,7 +150,9 @@ Columns:
 ```{r, warning = FALSE}
 DT::datatable(head(network), class = 'cell-border stripe')
 ```
-
+```{r, warning = FALSE}
+DT::datatable(head(network_imputed), class = 'cell-border stripe')
+```
 
 # Network Analysis
 ***
@@ -140,7 +160,7 @@ DT::datatable(head(network), class = 'cell-border stripe')
 ## Quality
 
 Evaluating the r2 for each model gives us the possibility to compare the performances of our models.
-
+### Input data
 > Note the rsquared is the same for each target.  
 
 ```{r, warning = FALSE}
@@ -158,11 +178,27 @@ nedges <- dim(network)[1]
 cat('Number of Nodes: ',nnodes)
 cat('Number of Edges: ',nedges)
 ```
+### Imputed data
+```{r, warning = FALSE}
+gg_all_imputed <- network_imputed[predictor == '(Intercept)',] %>%  
+            ggplot( aes(y=r_squared))  +
+                    geom_boxplot()
 
+gg_grouped_imputed <- network_imputed[predictor == '(Intercept)',] %>%  
+            ggplot( aes(y=r_squared,x=target_layer))  +   
+                    geom_boxplot(fill=c("steel blue",'#842F39', "orange"))
+
+nnodes_imputed <- c(network_imputed$target, network_imputed$predictor) %>% unique %>% length
+nedges_imputed <- dim(network_imputed)[1]
+
+cat('Number of Nodes: ',nnodes_imputed)
+cat('Number of Edges: ',nedges_imputed)
+```
 
 ## Filter network 
 
 Often we are only interested in models which perform well and have large effect sizes.
+### Input data
 ```{r, warning = FALSE}
 network <- network %>% 
   filter(value > 0.001 | value < -0.001 ) %>% # filter low effects
@@ -192,7 +228,36 @@ cat('Density: ', ecount(ig_network)/(vcount(ig_network)*(vcount(ig_network)-1)),
 cat('Reciprocity: ', reciprocity(ig_network) , '\n' )
 cat('Transitivity: ', transitivity(as.undirected(ig_network, mode="collapse")) , '\n' )
 ```
+### Imputed data
+```{r, warning = FALSE}
+network_imputed <- network_imputed %>% 
+  filter(value > 0.001 | value < -0.001 ) %>% # filter low effects
+  filter(r_squared > 0.001)  %>%  # filter low performing models
+  filter(predictor != '(Intercept)') # filter all intercepts (should be close to 0 due to normalization step)
+```
 
+New network_imputed properties
+```{r, warning = FALSE}
+nnodes <- c(network_imputed$target, network_imputed$predictor) %>% unique %>% length
+nedges <- dim(network_imputed)[1]
+
+cat('Number of Nodes: ',nnodes)
+cat('Number of Edges: ',nedges)
+```
+
+Generate igraph for easier network_imputed analysis
+```{r, warning = FALSE}
+#generate undirected igraph
+ig_network_imputed <- to_igraph(network_imputed, directed=TRUE) 
+ig_network_imputed %>% plot_kimono
+```
+
+## General
+```{r, warning = FALSE}
+cat('Density: ', ecount(ig_network_imputed)/(vcount(ig_network_imputed)*(vcount(ig_network_imputed)-1)), '\n' )
+cat('Reciprocity: ', reciprocity(ig_network_imputed) , '\n' )
+cat('Transitivity: ', transitivity(as.undirected(ig_network_imputed, mode="collapse")) , '\n' )
+```
 # Session
 ***
 ```{r , eval = FALSE }
