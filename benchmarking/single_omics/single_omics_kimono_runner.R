@@ -1,12 +1,12 @@
 #library(kimono)
-source("knn.impute.kimono.R")
+source("./../../R/knn.impute.kimono.R")
 
 args = (commandArgs(TRUE))
 
 if(length(args)==0){
     print("No arguments supplied.")
     ##supply default values
-    input = "/home/icb/juan.henao/lasso_benchmark/input_data/090322_single_omics_benchmark.RData"
+    input = "./../../data/100322_single_omics_benchmark.RData"
     cores = 2
     bench_params = c(0.10,1)
 }else{
