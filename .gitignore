@@ -1,5 +1,9 @@
-.Rproj.user
-.Rhistory
-.RData
-.Ruserdata
-data
+plots/
+.ipynb_checkpoints
+*.ipynb_checkpoints
+*.RData
+*.Rhistory
+*.Rproj.user
+*index_files
+data/
+index.html

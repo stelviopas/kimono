@@ -67,6 +67,7 @@ The fully observed variables are cnv and mutation. Partially observed variables 
 
 ```{r, warning=TRUE}
 library(impute)
+library(data.table)
 
 # Which data is missing?
 message(paste0("# of missing values by genes ",sum(is.na(input_data$gene))))
@@ -77,9 +78,7 @@ message(paste0("# of missing values by phenotype: time ",sum(is.na(input_data$ph
 message(paste0("# of missing values by phenotype: status ",sum(is.na(input_data$phenotype$srv.status))))
 message(paste0("# of missing values by mutation ",sum(is.na(input_data$mutation))))
 
-THRESHOLD_MISSING <- 0.2
 SEED <- 42
-K <- 10
 
 # GENES
 # rows are sample IDs, columns are gene IDs
@@ -88,7 +87,7 @@ gene <- as.data.frame(input_data$gene)
 gene.t <- t(gene)
 print(dim(gene.t))
 message("genes x samples before the knn imputation ")
-geneImp <- impute.knn(gene.t, k=K, rowmax = THRESHOLD_MISSING, colmax = THRESHOLD_MISSING, rng.seed = SEED)
+geneImp <- impute.knn(gene.t, rng.seed = SEED)
 imputedGene <- t(geneImp$data)
 message(paste0("# of missing values by genes after imputation ",sum(is.na(imputedGene))))
 
@@ -99,13 +98,25 @@ methylation <- as.data.frame(input_data$methylation)
 methylation.t <- t(methylation)
 print(dim(methylation.t))
 message("methylation x samples before the knn imputation")
-methylationImp <- impute.knn(methylation.t, k=K, rowmax = THRESHOLD_MISSING, colmax = THRESHOLD_MISSING, rng.seed = SEED)
+methylationImp <- impute.knn(methylation.t, rng.seed = SEED)
 imputedMethylation <- t(methylationImp$data)
 message(paste0("# of missing values by methylation after imputation ",sum(is.na(imputedMethylation))))
+
+#PHENOTYPE
+# rows are sample IDs, columns are phenotype features
+phenotype <- as.data.frame(input_data$phenotype)
+# transform
+phenotype.t <- t(phenotype)
+print(dim(phenotype.t))
+message("phenotype x samples before the knn imputation")
+phenotypeImp <- impute.knn(phenotype.t, rng.seed = SEED)
+imputedPhenotype <- t(phenotypeImp$data)
+message(paste0("# of missing values by phenotype after imputation ",sum(is.na(imputedPhenotype))))
 
 imputed_data <- input_data
 imputed_data$gene <- as.data.table(imputedGene)
 imputed_data$methylation <- as.data.table(imputedMethylation)
+imputed_data$phenotype <- as.data.table(imputedPhenotype)
 
 message(paste0("# of missing values by genes ",sum(is.na(imputed_data$gene))))
 message(paste0("# of missing values by methylation ",sum(is.na(imputed_data$methylation))))

@@ -1,0 +1,146 @@
+
+R version 4.0.3 (2020-10-10) -- "Bunny-Wunnies Freak Out"
+Copyright (C) 2020 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+[Previously saved workspace restored]
+
+> library(kimono)
+Loading required package: data.table
+Loading required package: dplyr
+
+Attaching package: ‘dplyr’
+
+The following objects are masked from ‘package:data.table’:
+
+    between, first, last
+
+The following objects are masked from ‘package:stats’:
+
+    filter, lag
+
+The following objects are masked from ‘package:base’:
+
+    intersect, setdiff, setequal, union
+
+Loading required package: oem
+Loading required package: bigmemory
+Loading required package: foreach
+Loading required package: igraph
+
+Attaching package: ‘igraph’
+
+The following objects are masked from ‘package:dplyr’:
+
+    as_data_frame, groups, union
+
+The following objects are masked from ‘package:stats’:
+
+    decompose, spectrum
+
+The following object is masked from ‘package:base’:
+
+    union
+
+Loading required package: doSNOW
+Loading required package: iterators
+Loading required package: snow
+Loading required package: tidyverse
+System has not been booted with systemd as init system (PID 1). Can't operate.
+Failed to create bus connection: Host is down
+── Attaching packages ─────────────────────────────────────── tidyverse 1.3.1 ──
+✔ ggplot2 3.3.5     ✔ purrr   0.3.4
+✔ tibble  3.1.6     ✔ stringr 1.4.0
+✔ tidyr   1.2.0     ✔ forcats 0.5.1
+✔ readr   1.4.0     
+── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+✖ purrr::accumulate()     masks foreach::accumulate()
+✖ tibble::as_data_frame() masks igraph::as_data_frame(), dplyr::as_data_frame()
+✖ dplyr::between()        masks data.table::between()
+✖ purrr::compose()        masks igraph::compose()
+✖ tidyr::crossing()       masks igraph::crossing()
+✖ dplyr::filter()         masks stats::filter()
+✖ dplyr::first()          masks data.table::first()
+✖ igraph::groups()        masks dplyr::groups()
+✖ dplyr::lag()            masks stats::lag()
+✖ dplyr::last()           masks data.table::last()
+✖ purrr::simplify()       masks igraph::simplify()
+✖ purrr::transpose()      masks data.table::transpose()
+✖ purrr::when()           masks foreach::when()
+Warning message:
+In system("timedatectl", intern = TRUE) :
+  running command 'timedatectl' had status 1
+> 
+> args = (commandArgs(TRUE))
+> 
+> if(length(args)==0){
++     print("No arguments supplied.")
++     ##supply default values
++     input = "/home/icb/juan.henao/lasso_benchmark/input_data/090322_multi_omics_benchmark.RData"
++     cores = 2
++     bench_params = c(0.10,1)
++ }else{
++     cat("using CMD args")
++     for(i in 1:length(args)){
++          eval(parse(text=args[[i]]))
++     }
++ }
+using CMD args> 
+> load(input)
+> 
+> white_noise <- bench_params[2]
+> missingness <- bench_params[1]
+> 
+> for(iter in seq(5)){
++     set.seed(iter)
++     
++     if(white_noise != 0){
++     for(layer in c("gene","cnv","methylation")){
++         sds_matrix <- matrix(0,nrow = nrow(input_data[[layer]]),ncol=ncol(input_data[[layer]]))
++     sds <- apply(as.matrix(input_data[[layer]]),2,sd)
++     for(x in seq(length(sds))){
++     sds_matrix[,x] <- rnorm(n = nrow(input_data[[layer]]),mean = 0, sd = sds[x] * white_noise)
++     }
++     input_data[[layer]] <- input_data[[layer]] + sds_matrix
++     
++     input_data[[layer]] <- setDT(input_data[[layer]])
++     }
++     pre.methylation <- as.matrix(input_data[['methylation']])
++     pre.methylation[which(pre.methylation < 0)] <- 0
++     pre.methylation[which(pre.methylation > 1)] <- 1
++     input_data[['methylation']] <- setDT(as.data.frame(pre.methylation))
++     }
++     
++     if(missingness != 0){
++         gender.two <- which(input_data[['phenotype']]$gender == 2)
++     ifelse(to.deletion %in% gender.two,yes = to.deletion + 1,no = to.deletion)
++     to.deletion <- sample(x = nrow(input_data[['phenotype']]), size = round(nrow(input_data[['phenotype']]) * missingness))
++     all.pos <- which(!rownames(input_data[['phenotype']]) %in% to.deletion)  
++ 
++     input_data[['gene']] <- input_data[['gene']][all.pos,]
++     input_data[['cnv']] <- input_data[['cnv']][all.pos,]
++     input_data[['methylation']] <- input_data[['methylation']][all.pos,]
++     input_data[['phenotype']] <- input_data[['phenotype']][all.pos,]
++     }
++     
++     
++     network <- kimono(input_data, prior_network ,core = cores, infer_missing_prior = FALSE)
++     write.csv(network,paste0("mor_experiment_noise_",white_noise,"_missing_",missingness,"_iteration_",iter,".csv"), quote = FALSE, row.names = FALSE)
++ }
+Error in to.deletion %in% gender.two : object 'to.deletion' not found
+Calls: ifelse -> %in%
+Execution halted
