@@ -1,4 +1,5 @@
-library(kimono)
+#library(kimono)
+source("./../../R/knn.impute.kimono.R")
 
 args = (commandArgs(TRUE))
 
@@ -60,7 +61,7 @@ for(iter in seq(5)){
     
     
     
-    network <- kimono(input_data, prior_network ,core = cores, infer_missing_prior = FALSE)
+    network <- knn.impute.kimono(input_data, prior_network, seed = iter, core = cores, infer_missing_prior = TRUE)
     write.csv(network,paste0("mor_experiment_noise_",white_noise,"_missing_",missingness,"_iteration_",iter,".csv"), quote = FALSE, row.names = FALSE)
 }
 
